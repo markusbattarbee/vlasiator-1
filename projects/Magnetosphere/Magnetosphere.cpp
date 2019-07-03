@@ -54,7 +54,7 @@ namespace projects {
       RP::add("Magnetosphere.dipoleType","0: Normal 3D dipole, 1: line-dipole for 2D polar simulations, 2: line-dipole with mirror, 3: 3D dipole with mirror", 0);
       RP::add("Magnetosphere.dipoleMirrorLocationX","x-coordinate of dipole Mirror", -1.0);
 
-      RP::add("Magnetosphere.refine_L3radius","Radius of L3-refined sphere", 6.371e7); // 10 RE
+      RP::add("Magnetosphere.refine_L3radius","Radius of L3-refined spherical cap", 6.371e7); // 10 RE
       RP::add("Magnetosphere.refine_L3nosexmin","Low x-value of nose L3-refined box", 5.0e7); //
       RP::add("Magnetosphere.refine_L3tailheight","Height in +-z of tail L3-refined box", 1.0e7); //
       RP::add("Magnetosphere.refine_L3tailwidth","Width in +-y of tail L3-refined box", 5.0e7); // 10 RE
@@ -146,7 +146,6 @@ namespace projects {
          if(myRank == MASTER_RANK) cerr << __FILE__ << ":" << __LINE__ << " ERROR: This option has not been added!" << endl;
          exit(1);
       }
-
 
       if(!Readparameters::get("Magnetosphere.refine_L3radius", this->refine_L3radius)) {
          if(myRank == MASTER_RANK) cerr << __FILE__ << ":" << __LINE__ << " ERROR: This option has not been added!" << endl;
