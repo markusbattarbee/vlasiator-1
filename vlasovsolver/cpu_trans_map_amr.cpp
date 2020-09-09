@@ -520,7 +520,6 @@ void propagatePencil(
    const uint lengthOfPencil,
    const Realv threshold
 ) {
-
    // Get velocity data from vmesh that we need later to calculate the translation
    velocity_block_indices_t block_indices;
    uint8_t refLevel;
@@ -578,7 +577,7 @@ void propagatePencil(
             // Dz: is a padded array, pointer can point to the beginning, i + VLASOV_STENCIL_WIDTH will get the right cell.
             // values: transpose function adds VLASOV_STENCIL_WIDTH to the block index, therefore we substract it here, then
             // i + VLASOV_STENCIL_WIDTH will point to the right cell. Complicated! Why! Sad! MVGA!
-            compute_ppm_coeff_nonuniform(dz,
+            compute_ppm_coeff_nonuniform(dz + i,
                                          values + i_trans_ps_blockv_pencil(planeVector, k, i-VLASOV_STENCIL_WIDTH, lengthOfPencil),
                                          h4, VLASOV_STENCIL_WIDTH, a, threshold);
             
