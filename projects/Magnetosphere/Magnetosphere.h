@@ -97,6 +97,7 @@ namespace projects {
 
       Real refine_L2radius;
       Real refine_L2tailthick;
+      Real refine_L2nosexmin;
       Real refine_L1radius;
       Real refine_L1tailthick;
 

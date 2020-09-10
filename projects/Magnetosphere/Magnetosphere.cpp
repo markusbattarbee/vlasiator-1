@@ -54,11 +54,11 @@ namespace projects {
       RP::add("Magnetosphere.dipoleType","0: Normal 3D dipole, 1: line-dipole for 2D polar simulations, 2: line-dipole with mirror, 3: 3D dipole with mirror", 0);
       RP::add("Magnetosphere.dipoleMirrorLocationX","x-coordinate of dipole Mirror", -1.0);
 
-      RP::add("Magnetosphere.refine_L4radius","Radius of L3-refined sphere or cap", 6.0e7);
-      RP::add("Magnetosphere.refine_L4nosexmin","Low x-value of nose L3-refined box", 5.5e7);
+      RP::add("Magnetosphere.refine_L4radius","Radius of L4-refined sphere or cap", 6.0e7);
+      RP::add("Magnetosphere.refine_L4nosexmin","Low x-value of nose L4-refined cap", 5.5e7);
 
       RP::add("Magnetosphere.refine_L3radius","Radius of L3-refined sphere or cap", 6.371e7); // 10 RE
-      RP::add("Magnetosphere.refine_L3nosexmin","Low x-value of nose L3-refined box", 5.0e7); //
+      RP::add("Magnetosphere.refine_L3nosexmin","Low x-value of nose L3-refined cap", 5.0e7); //
       RP::add("Magnetosphere.refine_L3tailheight","Height in +-z of tail L3-refined box", 1.0e7); //
       RP::add("Magnetosphere.refine_L3tailwidth","Width in +-y of tail L3-refined box", 5.0e7); // 10 RE
       RP::add("Magnetosphere.refine_L3tailxmin","Low x-value of tail L3-refined box", -20.0e7); // 10 RE
@@ -66,6 +66,7 @@ namespace projects {
       
       RP::add("Magnetosphere.refine_L2radius","Radius of L2-refined sphere", 9.5565e7); // 15 RE
       RP::add("Magnetosphere.refine_L2tailthick","Thickness of L2-refined tail region", 3.1855e7); // 5 RE
+      RP::add("Magnetosphere.refine_L2nosexmin","Low x-value of nose L2-refined cap", 0.0);
       RP::add("Magnetosphere.refine_L1radius","Radius of L1-refined sphere", 1.59275e8); // 25 RE
       RP::add("Magnetosphere.refine_L1tailthick","Thickness of L1-refined tail region", 6.371e7); // 10 RE
 
@@ -190,6 +191,10 @@ namespace projects {
       }
 
       if(!Readparameters::get("Magnetosphere.refine_L2radius", this->refine_L2radius)) {
+         if(myRank == MASTER_RANK) cerr << __FILE__ << ":" << __LINE__ << " ERROR: This option has not been added!" << endl;
+         exit(1);
+      }
+      if(!Readparameters::get("Magnetosphere.refine_L2nosexmin", this->refine_L2nosexmin)) {
          if(myRank == MASTER_RANK) cerr << __FILE__ << ":" << __LINE__ << " ERROR: This option has not been added!" << endl;
          exit(1);
       }
@@ -682,6 +687,11 @@ namespace projects {
 		 xyz[0] = P::xmin + (i+0.5)*0.5*P::dx_ini;
 		 xyz[1] = P::ymin + (j+0.5)*0.5*P::dy_ini;
 		 xyz[2] = P::zmin + (k+0.5)*0.5*P::dz_ini;
+
+		 // Check if L2 nose cap is active and cell is outside it
+		 if ((refine_L2nosexmin>0) && (xyz[0]<refine_L2nosexmin)) {
+		    continue;
+		 }
                  
 		 Real radius2 = (xyz[0]*xyz[0]+xyz[1]*xyz[1]+xyz[2]*xyz[2]);
 		 // Check if cell is within L1 sphere, or within L1 tail slice
