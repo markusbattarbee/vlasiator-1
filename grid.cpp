@@ -132,8 +132,18 @@ void initializeGrids(
 
 
    phiprof::start("Refine spatial cells");
-   if(P::amrMaxSpatialRefLevel > 0 && project.refineSpatialCells(mpiGrid)) {
-      recalculateLocalCellsCache();
+   // We need this first as well
+   recalculateLocalCellsCache();
+   if (!P::isRestart) {
+      if (P::amrMaxSpatialRefLevel > 0 && project.refineSpatialCells(mpiGrid)) {
+         mpiGrid.balance_load();
+         recalculateLocalCellsCache();
+      }
+   } else {
+      if (readFileCells(mpiGrid, P::restartFileName)) {
+         mpiGrid.balance_load();
+         recalculateLocalCellsCache();
+      }
    }
    phiprof::stop("Refine spatial cells");
    
@@ -183,6 +193,12 @@ void initializeGrids(
       exit(1);
    }
    phiprof::stop("Check boundary refinement");
+
+   // Init mesh data container
+   if (getObjectWrapper().meshData.initialize("SpatialGrid") == false) {
+      cerr << "(Grid) Failed to initialize mesh data container in " << __FILE__ << ":" << __LINE__ << endl;
+      exit(1);
+   }
    
    if (P::isRestart) {
       logFile << "Restart from "<< P::restartFileName << std::endl << writeVerbose;
@@ -192,6 +208,34 @@ void initializeGrids(
          exit(1);
       }
       phiprof::stop("Read restart");
+
+      // For now, alpha is read from the restart file
+      phiprof::start("Re-refine spatial cells");
+      for (int i = 0; P::adaptRefinement && i < P::amrMaxSpatialRefLevel; ++i) {
+         project.adaptRefinement(mpiGrid);
+         initSpatialCellCoordinates(mpiGrid);
+         if(sysBoundaries.classifyCells(mpiGrid,technicalGrid) == false) {
+            cerr << "(MAIN) ERROR: System boundary conditions were not set correctly." << endl;
+            exit(1);
+         }
+
+         if(!sysBoundaries.checkRefinement(mpiGrid)) {
+            cerr << "(MAIN) ERROR: Boundary cells must have identical refinement level " << endl;
+            exit(1);
+         }
+
+         // balance load, update ghost cells
+         balanceLoad(mpiGrid, sysBoundaries);
+         SpatialCell::set_mpi_transfer_type(Transfer::VEL_BLOCK_DATA);
+         mpiGrid.update_copies_of_remote_neighbors(NEAREST_NEIGHBORHOOD_ID);
+
+         if (P::shouldFilter) {
+            project.filterRefined(mpiGrid);
+         }
+
+         // Consider recalculating alphas here. Requires fs grid to be set up and grid glue
+      }
+      phiprof::stop("Re-refine spatial cells");
    
       //initial state for sys-boundary cells, will skip those not set to be reapplied at restart
       phiprof::start("Apply system boundary conditions state");
@@ -290,23 +334,8 @@ void initializeGrids(
 
    }
 
-
-   // Init mesh data container
-   if (getObjectWrapper().meshData.initialize("SpatialGrid") == false) {
-      cerr << "(Grid) Failed to initialize mesh data container in " << __FILE__ << ":" << __LINE__ << endl;
-      exit(1);
-   }
-   
    //Balance load before we transfer all data below
    balanceLoad(mpiGrid, sysBoundaries);
-   
-   phiprof::initializeTimer("Fetch Neighbour data","MPI");
-   phiprof::start("Fetch Neighbour data");
-   // update complete cell spatial data for full stencil (
-   SpatialCell::set_mpi_transfer_type(Transfer::ALL_SPATIAL_DATA);
-   mpiGrid.update_copies_of_remote_neighbors(FULL_NEIGHBORHOOD_ID);
-   
-   phiprof::stop("Fetch Neighbour data");
    
    if (P::isRestart == false) {
       // Apply boundary conditions so that we get correct initial moments
@@ -342,6 +371,17 @@ void initializeGrids(
    momentsGrid.updateGhostCells();
    momentsDt2Grid.updateGhostCells();
    phiprof::stop("Finish fsgrid setup");
+
+   // Set this so CFL doesn't break
+   if(P::adaptRefinement) {
+      // Half-step acceleration
+      if( P::propagateVlasovAcceleration ) {
+         calculateAcceleration(mpiGrid, -0.5*P::dt + 0.5*P::bailout_min_dt);
+      } else {
+         calculateAcceleration(mpiGrid, 0.0);
+      }
+      P::dt = P::bailout_min_dt;
+   }
    
    phiprof::stop("Set initial state");
 }

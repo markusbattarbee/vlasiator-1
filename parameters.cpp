@@ -138,6 +138,12 @@ Realf P::amrRefineLimit = 1.0;
 Realf P::amrCoarsenLimit = 0.5;
 string P::amrVelRefCriterion = "";
 int P::amrMaxSpatialRefLevel = 0;
+bool P::shouldRefine = true;
+bool P::adaptRefinement = false;
+bool P::shouldFilter = false;
+Real P::refineTreshold = 1.0;
+Real P::unrefineTreshold = 0.1;
+Real P::refineMultiplier = 2.0;
 int P::amrBoxHalfWidthX = 1;
 int P::amrBoxHalfWidthY = 1;
 int P::amrBoxHalfWidthZ = 1;
@@ -239,7 +245,8 @@ bool Parameters::addParameters(){
 				"fg_e_hall vg_e_gradpe fg_b_vol vg_b_vol vg_b_background_vol vg_b_perturbed_vol "+
 				"vg_pressure fg_pressure populations_vg_ptensor "+
 				"b_vol_derivatives "+
-				"vg_gridcoordinates fg_gridcoordinates meshdata");
+				"vg_gridcoordinates fg_gridcoordinates meshdata "+
+            "vg_amr_drho vg_amr_du vg_amr_dpsq vg_amr_dbsq vg_amr_db vg_amr_alpha vg_amr_reflevel");
 
    Readparameters::addComposing("variables_deprecated.output", std::string()+"List of deprecated names for data reduction operators (DROs). Names are case insensitive. "+
 				"Available (20190521): "+
@@ -290,6 +297,12 @@ bool Parameters::addParameters(){
    Readparameters::add("AMR.refine_limit","If the refinement criterion function returns a larger value than this, block is refined",(Realf)1.0);
    Readparameters::add("AMR.coarsen_limit","If the refinement criterion function returns a smaller value than this, block can be coarsened",(Realf)0.5);
    Readparameters::add("AMR.max_spatial_level","Maximum spatial mesh refinement level",(uint)0);
+   Readparameters::add("AMR.should_refine","If false, do not refine Vlasov grid regardless of max spatial level",true);
+   Readparameters::add("AMR.adapt_refinement","If true, re-refine vlasov grid on restart", false);
+   Readparameters::add("AMR.should_filter","If true, filter vlasov grid with boxcar filter on restart",false);
+   Readparameters::add("AMR.refine_treshold","Determines the minimum value of the refinement parameter to refine cells", 1.0);
+   Readparameters::add("AMR.unrefine_treshold","Determines the maximum value of the refinement parameter to unrefine cells", 0.1);
+   Readparameters::add("AMR.refine_multiplier","The value by which the refinement treshold is multiplied after each refinement pass", 2.0);
    Readparameters::add("AMR.box_half_width_x","Half width of the box that is refined (for testing)",(uint)1);
    Readparameters::add("AMR.box_half_width_y","Half width of the box that is refined (for testing)",(uint)1);
    Readparameters::add("AMR.box_half_width_z","Half width of the box that is refined (for testing)",(uint)1);
@@ -458,6 +471,12 @@ bool Parameters::getParameters(){
    }
    Readparameters::get("AMR.max_velocity_level",P::amrMaxVelocityRefLevel);
    Readparameters::get("AMR.max_spatial_level",P::amrMaxSpatialRefLevel);
+   Readparameters::get("AMR.should_refine",P::shouldRefine);
+   Readparameters::get("AMR.adapt_refinement",P::adaptRefinement);
+   Readparameters::get("AMR.should_filter",P::shouldFilter);
+   Readparameters::get("AMR.refine_treshold",P::refineTreshold);
+   Readparameters::get("AMR.unrefine_treshold",P::unrefineTreshold);
+   Readparameters::get("AMR.refine_multiplier",P::refineMultiplier);
    Readparameters::get("AMR.box_half_width_x",P::amrBoxHalfWidthX);
    Readparameters::get("AMR.box_half_width_y",P::amrBoxHalfWidthY);
    Readparameters::get("AMR.box_half_width_z",P::amrBoxHalfWidthZ);
