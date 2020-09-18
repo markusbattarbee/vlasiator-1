@@ -687,7 +687,13 @@ namespace projects {
             Real radius2 = pow(xyz[0], 2) + pow(xyz[1], 2) + pow(xyz[2], 2);
             bool inSphere = radius2 < refine_L1radius*refine_L1radius;
             bool inTail = xyz[0] < 0 && fabs(xyz[1]) < refine_L1radius && fabs(xyz[2]) < refine_L1tailthick;
+            // Also refine once cells which will end up in L2 cap
+            bool capActive = (refine_L2nosexmin != 0);
+            bool inCap = ( (xyz[0] > refine_L2nosexmin) && (radius2 > pow(refine_L1radius, 2)) && (radius2 < pow(refine_L2radius, 2)) );
             if (canRefine(xyz, 0) && (inSphere || inTail)) {
+               //#pragma omp critical
+               mpiGrid.refine_completely(id);
+            } else if (canRefine(xyz, 0) && capActive && inCap) {
                //#pragma omp critical
                mpiGrid.refine_completely(id);
             }
@@ -711,9 +717,9 @@ namespace projects {
             CellID id = cells[i];
             std::array<double,3> xyz = mpiGrid.get_center(id);
 
-	    Real radius2 = pow(xyz[0], 2) + pow(xyz[1], 2) + pow(xyz[2], 2);
-	    bool capActive = (refine_L2nosexmin != 0);
-	    bool inCap = ( (xyz[0] > refine_L2nosexmin) && radius2 > pow(refine_L1radius, 2) && (radius2 < pow(refine_L2radius, 2)) );
+            Real radius2 = pow(xyz[0], 2) + pow(xyz[1], 2) + pow(xyz[2], 2);
+            bool capActive = (refine_L2nosexmin != 0);
+            bool inCap = ( (xyz[0] > refine_L2nosexmin) && radius2 > pow(refine_L1radius, 2) && (radius2 < pow(refine_L2radius, 2)) );
             bool inSphere = radius2 < pow(refine_L2radius, 2);
             bool inTail = xyz[0] < 0 && fabs(xyz[1]) < refine_L2radius && fabs(xyz[2])<refine_L2tailthick;
             if (!capActive && (canRefine(xyz, 1) && (inSphere || inTail))) {
@@ -848,7 +854,6 @@ namespace projects {
       }
 
       return !cells.empty();
->>>>>>> filtering-dev
    }
    
 } // namespace projects
