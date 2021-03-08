@@ -97,6 +97,7 @@ void flagSpatialCellsForAmrCommunication(const dccrg::Dccrg<SpatialCell,dccrg::C
 
          // Start with false
          ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_COMM_X+dimension] = false;
+         ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_NEIGH_X+dimension] = false;
 
          // In dimension, check iteratively if any neighbors up to VLASOV_STENCIL_WIDTH distance away are on a different process
          const auto* NbrPairs = mpiGrid.get_neighbors_of(c, neighborhood);
@@ -144,6 +145,7 @@ void flagSpatialCellsForAmrCommunication(const dccrg::Dccrg<SpatialCell,dccrg::C
                   foundNeighborsP.insert(nbrPair.first);
                   if (!mpiGrid.is_local(nbrPair.first)) {
                      ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_COMM_X+dimension] = true;
+                     if (iSrc==VLASOV_STENCIL_WIDTH-1) ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_NEIGH_X+dimension] = true;
                      break;
                   }
                }
@@ -166,6 +168,7 @@ void flagSpatialCellsForAmrCommunication(const dccrg::Dccrg<SpatialCell,dccrg::C
                   foundNeighborsM.insert(nbrPair.first);
                   if (!mpiGrid.is_local(nbrPair.first)) {
                      ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_COMM_X+dimension] = true;
+                     if (iSrc==VLASOV_STENCIL_WIDTH-1) ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_NEIGH_X+dimension] = true;
                      break;
                   }
                }
@@ -357,7 +360,8 @@ void computeSpatialSourceCellsForPencil(const dccrg::Dccrg<SpatialCell,dccrg::Ca
 void computeSpatialTargetCellsForPencilsWithFaces(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                                          setOfPencils& pencils,
                                          const uint dimension,
-                                         SpatialCell **targetCells){
+                                         SpatialCell **targetCells,
+                                         const uint translationAMRPhase){
 
    uint GID = 0;
    // Loop over pencils
@@ -1361,7 +1365,7 @@ void prepareSeedIdsAndPencils(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Ge
    }
 
    phiprof::start("check_ghost_cells");
-   // Check refinement of two ghost cells on each end of each pencil
+   // Check refinement of two ghost cells on each end of each pencil, split if necessary
    check_ghost_cells(mpiGrid,DimensionPencils[dimension],dimension);
    phiprof::stop("check_ghost_cells");
 
@@ -1369,8 +1373,136 @@ void prepareSeedIdsAndPencils(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Ge
 
    if(printPencils) printPencilsFunc(DimensionPencils[dimension],dimension,myRank);
    phiprof::stop("buildPencils");
+
+   /** Check all local cells in each pencil, update flag counts for each pencil
+       regarding AMR translation requirements (needed for task-based translation)
+    */
+   update_pencil_translation_flags(mpiGrid, DimensionPencils[dimension]);
+
 }
 
+/* Function for counting the amount of cells in each pencil which require
+ * a) remote neighbor updates after translation (remote target contribution)
+ * b) remote neighbor updates before translation (VLASOV_STENCIL_WIDTH sources)
+ *
+ * @param [in] mpiGrid DCCRG grid object
+ * @param [in] dimension Spatial dimension
+ */
+void update_pencil_translation_flags(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+                                    const setOfPencils& pencils) {
+   
+#pragma omp parallel for   
+   for (uint pencili = 0; pencili < pencils.N; ++pencili) {
+      std::array<bool,6> flags = {false,false,false,false,false,false};
+      auto ids = pencils.getIds(ipencil);
+      for (auto id : ids) {
+         SpatialCell *ccell = mpiGrid[id];
+         if (!ccell) continue;
+      
+         flags[0] = flags[0] || ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_COMM_X];
+         flags[1] = flags[1] || ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_COMM_Y];
+         flags[2] = flags[2] || ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_COMM_Z];
+         flags[3] = flags[3] || ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_NEIGH_X];
+         flags[4] = flags[4] || ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_NEIGH_Y];
+         flags[5] = flags[5] || ccell->SpatialCell::parameters[CellParams::AMR_TRANSLATE_NEIGH_Z];
+      }
+      updatePencilFlags(pencili, flags);
+   }
+}
+
+/* Function for counting the amount of cells in each pencil which require
+ * a) remote neighbor updates after translation (remote target contribution)
+ * b) remote neighbor updates before translation (VLASOV_STENCIL_WIDTH sources)
+ *
+ * @param [in] mpiGrid DCCRG grid object
+ * @param [in] dimension Spatial dimension
+ */
+bool check_pencil_translation_flags(const setOfPencils& pencils,
+                                    const uint pencilid,
+                                    const uint dimension,
+                                    const uint translationAMRPhase) {
+   bool translate = false;
+   std::array<bool,6> flags = pencils.taskFlags[pencilid];
+   switch (dimension) {
+      case 0: // X
+         switch (translationAMRPhase) {
+            case 1: 
+               // Translate pencils which have remote neighbor contributions in X-direction
+               if (flags[3]) translate=true;
+               break;
+            case 2: // unnecessary
+               // Translate pencils which:
+               // do NOT have remote neighbor contributions in X-direction
+               // DO have Z-direction remote neighbors in VLASOV_STENCIL_WIDTH
+               if (!flags[3] && flags[2]) translate=true;
+               break;
+            case 3: // unnecessary
+               // Translate the rest of X-directional pencils
+               if (!flags[3] && !flags[2]) translate=true;
+               break;
+            case 4:
+               // Combination of cases 2 and 3
+               if (!flags[3]) translate=true;
+               break;
+            case default:
+               cerr << __FILE__ << ":"<< __LINE__ << " Wrong dimension, abort"<<endl;
+               abort();
+         break;
+      case 1: // Y
+         switch (translationAMRPhase) {
+            case 1: 
+               // Translate pencils which have remote neighbor contributions in Y-direction
+               if (flags[4]) translate=true;
+               break;
+            case 2:
+               // Translate pencils which:
+               // do NOT have remote neighbor contributions in Y-direction
+               // DO have X-direction remote neighbors in VLASOV_STENCIL_WIDTH
+               if (!flags[4] && flags[0]) translate=true;
+               break;
+            case 3:
+               // Translate the rest of Y-directional pencils
+               if (!flags[4] && !flags[0]) translate=true;
+               break;
+            case 4:
+               // Combination of cases 2 and 3
+               if (!flags[4]) translate=true;
+               break;
+            case default:
+               cerr << __FILE__ << ":"<< __LINE__ << " Wrong dimension, abort"<<endl;
+               abort();
+         break;
+      case 2: // Z
+         switch (translationAMRPhase) {
+            case 1: 
+               // Translate pencils which have remote neighbor contributions in Z-direction
+               if (flags[5]) translate=true;
+               break;
+            case 2:
+               // Translate pencils which:
+               // do NOT have remote neighbor contributions in Z-direction
+               // DO have Y-direction remote neighbors in VLASOV_STENCIL_WIDTH
+               if (!flags[5] && flags[1]) translate=true;
+               break;
+            case 3:
+               // Translate the rest of Z-directional pencils
+               if (!flags[5] && !flags[1]) translate=true;
+               break;
+            case 4:
+               // Combination of cases 2 and 3
+               if (!flags[5]) translate=true;
+               break;
+            case default:
+               cerr << __FILE__ << ":"<< __LINE__ << " Wrong dimension, abort"<<endl;
+               abort();
+         break;
+      case default:
+         cerr << __FILE__ << ":"<< __LINE__ << " Wrong dimension, abort"<<endl;
+         abort();
+   }
+   return translate;
+}
+   
 /* Map velocity blocks in all local cells forward by one time step in one spatial dimension.
  * This function uses 1-cell wide pencils to update cells in-place to avoid allocating large
  * temporary buffers.
@@ -1382,6 +1514,7 @@ void prepareSeedIdsAndPencils(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Ge
  * @param [in] dimension Spatial dimension
  * @param [in] dt Time step
  * @param [in] popId Particle population ID
+ * @param [in] translationAMRPhase phase of translation, used for selecting which pencils to propagate
  */
 bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                       const vector<CellID>& localPropagatedCells,
@@ -1389,12 +1522,13 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
                       std::vector<uint>& nPencils,
                       const uint dimension,
                       const Realv dt,
-                      const uint popID) {
-   
+                      const uint popID,
+                      const uint translationAMRPhase) {
+
    phiprof::start("setup");
 
    uint cell_indices_to_id[3]; /*< used when computing id of target cell in block*/
-   unsigned char  cellid_transpose[WID3]; /*< defines the transpose for the solver internal (transposed) id: i + j*WID + k*WID2 to actual one*/
+   unsigned char cellid_transpose[WID3]; /*< defines the transpose for the solver internal (transposed) id: i + j*WID + k*WID2 to actual one*/
    // return if there's no cells to propagate
    if(localPropagatedCells.size() == 0) {
       cout << "Returning because of no cells" << endl;
@@ -1468,7 +1602,7 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
    //    abort();
    // }
    
-   if (Parameters::prepareForRebalance == true) {
+   if ((Parameters::prepareForRebalance == true) && (translationAMRPhase==1)) {
       for (uint i=0; i<localPropagatedCells.size(); i++) {
          cuint myPencilCount = std::count(DimensionPencils[dimension].ids.begin(), DimensionPencils[dimension].ids.end(), localPropagatedCells[i]);
          nPencils[i] += myPencilCount;
@@ -1520,7 +1654,7 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
    // For targets we need the local cells, plus a padding of 1 cell at both ends
    phiprof::start("computeSpatialTargetCellsForPencils");
    std::vector<SpatialCell*> targetCells(DimensionPencils[dimension].sumOfLengths + DimensionPencils[dimension].N * 2 * nTargetNeighborsPerPencil );
-   computeSpatialTargetCellsForPencilsWithFaces(mpiGrid, DimensionPencils[dimension], dimension, targetCells.data());
+   computeSpatialTargetCellsForPencilsWithFaces(mpiGrid, DimensionPencils[dimension], dimension, targetCells.data(), translationAMRPhase);
    phiprof::stop("computeSpatialTargetCellsForPencils");
    
    
@@ -1532,6 +1666,7 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
    #pragma omp parallel
    {
       // declarations for variables needed by the threads
+      // TODO: allocate only what's needed at this stage of AMR translation
       std::vector<Realf, aligned_allocator<Realf, WID3>> targetBlockData((DimensionPencils[dimension].sumOfLengths + 2 * nTargetNeighborsPerPencil * DimensionPencils[dimension].N) * WID3);
       std::vector<std::vector<SpatialCell*>> pencilSourceCells;
       
@@ -1541,6 +1676,9 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
       std::vector<std::vector<Vec, aligned_allocator<Vec,WID3>>> pencildz;
       
       for(uint pencili = 0; pencili < DimensionPencils[dimension].N; ++pencili) {
+
+         // Only process pencils which are necessary
+         if (!check_pencil_translation_flags(DimensionPencils[dimension], pencili, dimension,translationAMRPhase)) continue;
          
          cint L = DimensionPencils[dimension].lengthOfPencils[pencili];
          cuint sourceLength = L + 2 * VLASOV_STENCIL_WIDTH;
@@ -1580,6 +1718,9 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
             uint totalTargetLength = 0;
             for(uint pencili = 0; pencili < DimensionPencils[dimension].N; ++pencili){
 //             for ( auto pencili : unionOfBlocksMapToPencilIds.at(blockGID) ) {
+
+               // Only process pencils which are necessary
+               if (!check_pencil_translation_flags(DimensionPencils[dimension], pencili, dimension,translationAMRPhase)) continue;
                
                int L = DimensionPencils[dimension].lengthOfPencils[pencili];
                uint targetLength = L + 2 * nTargetNeighborsPerPencil;
@@ -1659,6 +1800,9 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
             totalTargetLength = 0;
             for(uint pencili = 0; pencili < DimensionPencils[dimension].N; pencili++){
                
+               // Only process pencils which are necessary
+               if (!check_pencil_translation_flags(DimensionPencils[dimension], pencili, dimension,translationAMRPhase)) continue;
+         
                uint targetLength = DimensionPencils[dimension].lengthOfPencils[pencili] + 2 * nTargetNeighborsPerPencil;
                
                // store values from targetBlockData array to the actual blocks

@@ -39,6 +39,7 @@ struct setOfPencils {
    std::vector< Realv > x,y; // x,y - position
    std::vector< bool > periodic;
    std::vector< std::vector<uint> > path; // Path taken through refinement levels
+   std::vector< std::array<bool,6> > taskFlags; // Path taken through refinement levels
 
    setOfPencils() {
       
@@ -58,6 +59,7 @@ struct setOfPencils {
       y.clear();
       periodic.clear();
       path.clear();
+      taskFlags.clear();
    }
 
 
@@ -72,6 +74,12 @@ struct setOfPencils {
       y.push_back(yIn);
       periodic.push_back(periodicIn);
       path.push_back(pathIn);
+      std::array<bool,6> flags = {false,false,false,false,false,false};
+      taskFlags.push_back(flags);
+   }
+
+   void updatePencilFlags(const uint pencilId, const std::array<bool,6> flags) {
+      taskFlags.at(pencilId) = flags;
    }
 
    void removePencil(const uint pencilId) {
@@ -80,6 +88,7 @@ struct setOfPencils {
       y.erase(y.begin() + pencilId);
       periodic.erase(periodic.begin() + pencilId);
       path.erase(path.begin() + pencilId);
+      taskFlags.erase(path.begin() + pencilId);
 
       uint ibeg = idsStart[pencilId];
       ids.erase(ids.begin() + ibeg, ids.begin() + ibeg + lengthOfPencils[pencilId]);
@@ -188,12 +197,14 @@ struct setOfPencils {
 
 
 bool trans_map_1d_amr(const dccrg::Dccrg<spatial_cell::SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
-                  const std::vector<CellID>& localPropagatedCells,
-                  const std::vector<CellID>& remoteTargetCells,
-                  std::vector<uint>& nPencils,
-                  const uint dimension,
-                  const Realv dt,
-                  const uint popID);
+                      const std::vector<CellID>& localPropagatedCells,
+                      const std::vector<CellID>& remoteTargetCells,
+                      std::vector<uint>& nPencils,
+                      const uint dimension,
+                      const Realv dt,
+                      const uint popID,
+                      const uint translationAMRPhase
+   );
 
 void update_remote_mapping_contribution_amr(dccrg::Dccrg<spatial_cell::SpatialCell,
                                             dccrg::Cartesian_Geometry>& mpiGrid,
@@ -210,5 +221,8 @@ static std::array<setOfPencils,3> DimensionPencils;
 
 void flagSpatialCellsForAmrCommunication(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                                          const std::vector<CellID>& localPropagatedCells);
+
+void check_pencil_translation_flags(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+                                    const setOfPencils& pencils);
 
 #endif

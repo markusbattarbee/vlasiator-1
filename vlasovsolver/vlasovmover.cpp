@@ -61,6 +61,194 @@ creal EPSILON = 1.0e-25;
     three‐dimensional monotone and conservative semi‐Lagrangian scheme
     (SLICE‐3D) for transport problems." Quarterly Journal of the Royal
     Meteorological Society 138.667 (2012): 1640-1651.
+
+    Now rebuilt to take a task-based approach for spatial AMR
+  
+ */
+void calculateSpatialAMRTranslation(
+        dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+        const vector<CellID>& localCells,
+        const vector<CellID>& local_propagated_cells,
+        const vector<CellID>& local_target_cells,
+        const vector<CellID>& remoteTargetCellsx,
+        const vector<CellID>& remoteTargetCellsy,
+        const vector<CellID>& remoteTargetCellsz,
+        vector<uint>& nPencils,
+        creal dt,
+        const uint popID,
+        Real &time
+) {
+
+    int trans_timer;
+    bool localTargetGridGenerated = false;
+    bool AMRtranslationActive = true;
+
+    int myRank;
+    MPI_Comm_rank(MPI_COMM_WORLD,&myRank);
+
+    /* Async MPI commands in DCCRG
+       mpiGrid.start_remote_neighbor_copy_updates(NEIGHBORHOOD_ID);
+       mpiGrid.wait_remote_neighbor_copy_update_receives(NEIGHBORHOOD_ID);
+       mpiGrid.wait_remote_neighbor_copy_update_sends(NEIGHBORHOOD_ID);
+       mpiGrid.wait_remote_neighbor_copy_updates(NEIGHBORHOOD_ID);
+    */
+    uint translationAMRPhase = 0;
+    
+    // ------------- SLICE - map dist function in Z --------------- //
+    
+    // First update ghost cells in Z direction
+
+    trans_timer=phiprof::initializeTimer("transfer-stencil-data-z","MPI");
+    phiprof::start(trans_timer);
+    //updateRemoteVelocityBlockLists(mpiGrid,popID,VLASOV_SOLVER_Z_NEIGHBORHOOD_ID);
+    SpatialCell::set_mpi_transfer_direction(2);
+    SpatialCell::set_mpi_transfer_type(Transfer::VEL_BLOCK_DATA,false,AMRtranslationActive);
+    mpiGrid.update_copies_of_remote_neighbors(VLASOV_SOLVER_Z_NEIGHBORHOOD_ID);
+    phiprof::stop(trans_timer);
+
+    // Launch remote update contribution receives in Z-direction
+
+    // Translate pencils which have remote neighbor contributions in Z-direction
+    phiprof::start("compute-mapping-z");    
+    translationAMRPhase = 1;
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsz, nPencils, 2, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-z");
+
+    // Launch remote update contribution sends in Z-direction
+
+
+    // Translate pencils which:
+    // do NOT have remote neighbor contributions in Z-direction
+    // DO have X-direction remote neighbors in VLASOV_STENCIL_WIDTH
+    phiprof::start("compute-mapping-z");    
+    translationAMRPhase = 2;
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsz, nPencils, 2, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-z");
+
+    // Wait for remote update contribution receives in Z-direction (This could still waste resources)
+    // (and apply updates)
+
+    // Launch asynchronous sends and receives for update of ghost cells in X-direction
+    trans_timer=phiprof::initializeTimer("transfer-stencil-data-x","MPI");
+    phiprof::start(trans_timer);
+    //updateRemoteVelocityBlockLists(mpiGrid,popID,VLASOV_SOLVER_X_NEIGHBORHOOD_ID);
+    SpatialCell::set_mpi_transfer_direction(0);
+    SpatialCell::set_mpi_transfer_type(Transfer::VEL_BLOCK_DATA,false,AMRtranslationActive);
+    //mpiGrid.update_copies_of_remote_neighbors(VLASOV_SOLVER_X_NEIGHBORHOOD_ID);
+    mpiGrid.start_remote_neighbor_copy_updates(VLASOV_SOLVER_X_NEIGHBORHOOD_ID);
+    phiprof::stop(trans_timer);
+
+    // Translate the rest of Z-directional pencils
+    phiprof::start("compute-mapping-z");    
+    translationAMRPhase = 3;
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsz, nPencils, 2, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-z");
+
+
+
+    // ------------- SLICE - map dist function in X --------------- //
+
+    // Wait for receives of ghost cells in X-direction
+    phiprof::start(trans_timer);
+    mpiGrid.wait_remote_neighbor_copy_updates(VLASOV_SOLVER_X_NEIGHBORHOOD_ID);
+    phiprof::stop(trans_timer);
+
+    // Launch remote update contribution receives in X-direction
+
+    // Translate pencils which have remote neighbor contributions in X-direction
+    phiprof::start("compute-mapping-x");    
+    translationAMRPhase = 1;
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsx, nPencils, 0, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-x");
+
+    // Launch remote update contribution sends in X-direction
+
+    // Translate pencils which:
+    // do NOT have remote neighbor contributions in X-direction
+    // DO have Y-direction remote neighbors in VLASOV_STENCIL_WIDTH
+    phiprof::start("compute-mapping-x");    
+    translationAMRPhase = 2;
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsx, nPencils, 0, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-x");
+
+    // Wait for remote update contribution receives in X-direction (This could still waste resources)
+    // (and apply updates)
+
+    // Launch asynchronous sends and receives for update of ghost cells in Y-direction
+    trans_timer=phiprof::initializeTimer("transfer-stencil-data-y","MPI");
+    phiprof::start(trans_timer);
+    //updateRemoteVelocityBlockLists(mpiGrid,popID,VLASOV_SOLVER_Y_NEIGHBORHOOD_ID);
+    SpatialCell::set_mpi_transfer_direction(1);
+    SpatialCell::set_mpi_transfer_type(Transfer::VEL_BLOCK_DATA,false,AMRtranslationActive);
+    //mpiGrid.update_copies_of_remote_neighbors(VLASOV_SOLVER_Y_NEIGHBORHOOD_ID);
+    mpiGrid.start_remote_neighbor_copy_updates(VLASOV_SOLVER_Y_NEIGHBORHOOD_ID);
+    phiprof::stop(trans_timer);
+
+    // Translate the rest of X-directional pencils
+    phiprof::start("compute-mapping-x");    
+    translationAMRPhase = 3;
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsx, nPencils, 0, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-x");
+
+
+
+    // ------------- SLICE - map dist function in X --------------- //
+
+    // Wait for receives of ghost cells in Y-direction
+    phiprof::start(trans_timer);
+    mpiGrid.wait_remote_neighbor_copy_updates(VLASOV_SOLVER_Y_NEIGHBORHOOD_ID);
+    phiprof::stop(trans_timer);
+
+    // Launch remote update contribution receives in Y-direction
+
+    // Translate pencils which have remote neighbor contributions in Y-direction
+    phiprof::start("compute-mapping-y");
+    translationAMRPhase = 1;
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsy, nPencils, 1, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-y");
+
+    // Launch remote update contribution sends in Y-direction
+
+    // Translate the rest of Y-directional pencils
+    phiprof::start("compute-mapping-y");    
+    translationAMRPhase = 4; // 4 combines 2 and 3
+    trans_map_1d_amr(mpiGrid,local_propagated_cells, remoteTargetCellsy, nPencils, 1, dt,popID,translationAMRPhase);
+    phiprof::stop("compute-mapping-y");
+
+    // Wait for remote update contribution receives in Y-direction (This could still waste resources)
+    // (and apply updates)
+
+
+
+
+
+
+    trans_timer=phiprof::initializeTimer("update_remote-z","MPI");
+    phiprof::start("update_remote-z");
+    update_remote_mapping_contribution_amr(mpiGrid, 2,+1,popID);
+    update_remote_mapping_contribution_amr(mpiGrid, 2,-1,popID);
+    phiprof::stop("update_remote-z");
+
+    trans_timer=phiprof::initializeTimer("update_remote-x","MPI");
+    phiprof::start("update_remote-x");
+    update_remote_mapping_contribution_amr(mpiGrid, 0,+1,popID);
+    update_remote_mapping_contribution_amr(mpiGrid, 0,-1,popID);
+    phiprof::stop("update_remote-x");
+
+    trans_timer=phiprof::initializeTimer("update_remote-y","MPI");
+    phiprof::start("update_remote-y");
+    update_remote_mapping_contribution_amr(mpiGrid, 1,+1,popID);
+    update_remote_mapping_contribution_amr(mpiGrid, 1,-1,popID);
+    phiprof::stop("update_remote-y");
+ 
+}
+
+/** Propagates the distribution function in spatial space. 
+    
+    Based on SLICE-3D algorithm: Zerroukat, M., and T. Allen. "A
+    three‐dimensional monotone and conservative semi‐Lagrangian scheme
+    (SLICE‐3D) for transport problems." Quarterly Journal of the Royal
+    Meteorological Society 138.667 (2012): 1640-1651.
   
  */
 void calculateSpatialTranslation(
@@ -309,19 +497,36 @@ void calculateSpatialTranslation(
       phiprof::start(profName);
       SpatialCell::setCommunicatedSpecies(popID);
       //      std::cout << "I am at line " << __LINE__ << " of " << __FILE__ << std::endl;
-      calculateSpatialTranslation(
-         mpiGrid,
-         localCells,
-         local_propagated_cells,
-         local_target_cells,
-         remoteTargetCellsx,
-         remoteTargetCellsy,
-         remoteTargetCellsz,
-         nPencils,
-         dt,
-         popID,
-         time
-      );
+      // Now different calls for AMR and non-AMR translation
+      if (P::amrMaxSpatialRefLevel > 0) {
+         calculateSpatialAMRTranslation(
+            mpiGrid,
+            localCells,
+            local_propagated_cells,
+            local_target_cells,
+            remoteTargetCellsx,
+            remoteTargetCellsy,
+            remoteTargetCellsz,
+            nPencils,
+            dt,
+            popID,
+            time
+            );
+      } else {
+         calculateSpatialTranslation(
+            mpiGrid,
+            localCells,
+            local_propagated_cells,
+            local_target_cells,
+            remoteTargetCellsx,
+            remoteTargetCellsy,
+            remoteTargetCellsz,
+            nPencils,
+            dt,
+            popID,
+            time
+            );
+      }
       phiprof::stop(profName);
    }
    

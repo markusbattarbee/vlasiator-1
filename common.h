@@ -189,6 +189,9 @@ namespace CellParams {
       AMR_TRANSLATE_COMM_X, /*! < Flag to include this cell in AMR pre-translate communication  */
       AMR_TRANSLATE_COMM_Y, /*! < Flag to include this cell in AMR pre-translate communication  */
       AMR_TRANSLATE_COMM_Z, /*! < Flag to include this cell in AMR pre-translate communication  */
+      AMR_TRANSLATE_NEIGH_X, /*! < Flag if cell has remote X-directional face neighors  */
+      AMR_TRANSLATE_NEIGH_Y, /*! < Flag if cell has remote Y-directional face neighors  */
+      AMR_TRANSLATE_NEIGH_Z, /*! < Flag if cell has remote Z-directional face neighors  */
       N_SPATIAL_CELL_PARAMS
    };
 }
