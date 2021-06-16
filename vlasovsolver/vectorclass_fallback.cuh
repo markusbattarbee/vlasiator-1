@@ -57,7 +57,8 @@ class Vec4Simple
     static CUDA_HOSTDEV T getSquare(T b);
 };
 static CUDA_HOSTDEV void no_subnormals(){};
-/*
+
+/** -- commented out
 static CUDA_HOSTDEV void no_subnormals();
 template <class T>
 static CUDA_HOSTDEV inline Vec4Simple<T> abs(const Vec4Simple<T> &l);
@@ -161,7 +162,7 @@ template <class T>
 static CUDA_HOSTDEV inline Vec4Simple<double> to_double(Vec4Simple<T> const & a);
 template <class T>
 static CUDA_HOSTDEV inline Vec4Simple<float> to_float(Vec4Simple<T> const & a);
-*/
+ **/
 
 template <class T>
 static CUDA_HOSTDEV inline Vec4Simple<T> abs(const Vec4Simple<T> &l)

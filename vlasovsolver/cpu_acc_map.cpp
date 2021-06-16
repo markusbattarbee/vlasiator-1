@@ -111,13 +111,13 @@ void inline swapBlockIndices(velocity_block_indices_t &blockIndices, const uint 
     int totalColumns,
     Column *columns,
     int valuesSizeRequired,
-    Vec values[],
+    Vec *values,
     uint cell_indices_to_id[3],
     Realv intersection,
     Realv intersection_di,
     Realv intersection_dj,
     Realv intersection_dk,
-    Real minValue,
+    Realv minValue,
     Realv dv,
     Realv v_min
   )
@@ -160,7 +160,7 @@ bool map_1d(SpatialCell* spatial_cell,
    vmesh::VelocityMesh<vmesh::GlobalID,vmesh::LocalID>& vmesh    = spatial_cell->get_velocity_mesh(popID);
    vmesh::VelocityBlockContainer<vmesh::LocalID>& blockContainer = spatial_cell->get_velocity_blocks(popID);
 
-   Real minValue = spatial_cell->getVelocityBlockMinValue(popID);
+   Realv minValue = spatial_cell->getVelocityBlockMinValue(popID);
 
    //nothing to do if no blocks
    if(vmesh.size() == 0)

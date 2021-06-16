@@ -23,17 +23,6 @@ else
 	VECTORCLASS = VEC4D_FALLBACK
 endif
 
-#======== PAPI ==========
-#Add PAPI_MEM define to use papi to report memory consumption?
-#CXXFLAGS += -DPAPI_MEM
-#testpackage: CXXFLAGS += -DPAPI_MEM
-
-#======== Allocator =========
-#Use jemalloc instead of system malloc to reduce memory fragmentation https://github.com/jemalloc/jemalloc
-#Configure jemalloc with  --with-jemalloc-prefix=je_ when installing it
-CXXFLAGS += -DUSE_JEMALLOC -DJEMALLOC_NO_DEMANGLE
-
-
 #======= Compiler and compilation flags =========
 # NOTES on compiler flags:
 # CXXFLAGS is for compiler flags, they are always used
@@ -50,48 +39,65 @@ CXXFLAGS += -DUSE_JEMALLOC -DJEMALLOC_NO_DEMANGLE
 CC = mpicc
 CXX = mpic++
 NVCC = nvcc
-CUDAFLAGS = -gencode arch=compute_80,code=sm_80 -std=c++11
+CUDAFLAGS = -gencode arch=compute_80,code=sm_80 -std=c++11 -lineinfo,-G
+testpackage: CUDAFLAGS = -gencode arch=compute_80,code=sm_80 -std=c++11 -lineinfo,-G
 CMP = mpic++
 LNK = mpic++
 
-#GNU flags:
+#brand definition:
 CC_BRAND = nvhpc
 CC_BRAND_VERSION = 21.2
-CXXFLAGS += -g -O2 -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1 -gpu=cc80 -Minfo=accel -acc -fopenmp
-#-Minfo=accel -ta=tesla:lineinfo,keepbin,keepgpu,keepptx -Manno -g -nomp
-testpackage: CXXFLAGS += -g -O2 -acc -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1 -Minfo=accel
 
-MATHFLAGS =
-LDFLAGS = -O2 -g  -ta=tesla:lineinfo,keepbin,keepgpu,keepptx -L/appl/spack/v016/install-tree/gcc-4.8.5/nvhpc-21.2-l6xyb4/Linux_x86_64/21.2/cuda/11.2/lib64
+# activate OpenACC support:
+# add flags: -gpu=cc80 -acc
+
+# activate OpenMP offloading support:
+# add flags: -gpu=cc80 -mp=gpu
+
+# identify nvcc warnings: -Xcudafe --display_error_number
+# http://www.ssl.berkeley.edu/~jimm/grizzly_docs/SSL/opt/intel/cc/9.0/lib/locale/en_US/mcpcom.msg
+# suppress nvcc warnings: -Xcudafe "--diag_suppress=code_is_unreachable,set_but_not_used,declared_but_not_referenced"
+# equal to: -Xcudafe "--diag_suppress=111,550,177"
+
+# small loop unrolling is done automatically with nvcc #-std=c++17
+
+CXXFLAGS += -g -O3 -fopenmp -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1 -Xcudafe "--diag_suppress=111,550,177"
+testpackage: CXXFLAGS += -g -O2 -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1
+
+MATHFLAGS = -use_fast_math
+testpackage: MATHFLAGS = 
+
+LDFLAGS =  -lrt -L/appl/spack/v016/install-tree/gcc-4.8.5/nvhpc-21.2-l6xyb4/Linux_x86_64/21.2/cuda/11.2/lib64
+# -ta=tesla:lineinfo,keepbin,keepgpu,keepptx
 LIB_MPI = -lgomp
 
-# BOOST_VERSION = current trilinos version
-# ZOLTAN_VERSION = current trilinos verson
+#======== PAPI ==========
+#Add PAPI_MEM define to use papi to report memory consumption?
+# CXXFLAGS += -DPAPI_MEM
+# testpackage: CXXFLAGS += -DPAPI_MEM
+
+#======== Allocator =========
+# Use jemalloc instead of system malloc to reduce memory fragmentation https://github.com/jemalloc/jemalloc
+# Configure jemalloc with  --with-jemalloc-prefix=je_ when installing it
+CXXFLAGS += -DUSE_JEMALLOC -DJEMALLOC_NO_DEMANGLE
+testpackage: CXXFLAGS += -DUSE_JEMALLOC -DJEMALLOC_NO_DEMANGLE
 
 #======== Libraries ===========
 
-#MPT_VERSION = 4.0.5-cuda
-#JEMALLOC_VERSION = 4.0.4
 LIBRARY_PREFIX = /projappl/project_2002873/libraries/nvhpc/21.2
 LIBRARY_PREFIX2 = /projappl/project_2002873/libraries/clang/10.0.0
-
-#compiled libraries
-#INC_BOOST = -I/usr/include/boost/
-#LIB_BOOST = -L/usr/lib/x86_64-linux-gnu/ -lboost_program_options
 
 #LIB_PAPI = -I/$(LIBRARY_PREFIX2)/papi/include -lpapi
 #INC_PAPI = -L/$(LIBRARY_PREFIX2)/papi/lib
 
 INC_BOOST = -I/$(LIBRARY_PREFIX2)/boost/include
-LIB_BOOST = -L/$(LIBRARY_PREFIX2)/boost/lib -lboost_program_options
+LIB_BOOST = -L$(LIBRARY_PREFIX2)/boost/lib -lboost_program_options -Wl,-rpath=$(LIBRARY_PREFIX2)/boost/lib
 
 INC_ZOLTAN = -I/$(LIBRARY_PREFIX)/zoltan/include
 LIB_ZOLTAN = -L/$(LIBRARY_PREFIX)/zoltan/lib -lzoltan
 
-#INC_JEMALLOC = -I/$(LIBRARY_PREFIX)/include
-#LIB_JEMALLOC = -L/$(LIBRARY_PREFIX)/lib -ljemalloc -Wl,-rpath=$(LIBRARY_PREFIX)/lib
 INC_JEMALLOC = -I/$(LIBRARY_PREFIX2)/jemalloc/include
-LIB_JEMALLOC = -L/$(LIBRARY_PREFIX2)/jemalloc/lib -ljemalloc -Wl,-rpath=$(LIBRARY_PREFIX2)/jemalloc/lib
+LIB_JEMALLOC = -L$(LIBRARY_PREFIX2)/jemalloc/lib -ljemalloc -Wl,-rpath=$(LIBRARY_PREFIX2)/jemalloc/lib
 
 INC_VLSV = -I$(LIBRARY_PREFIX)/vlsv
 LIB_VLSV = -L$(LIBRARY_PREFIX)/vlsv -lvlsv -Wl,-rpath=$(LIBRARY_PREFIX)/vlsv/lib

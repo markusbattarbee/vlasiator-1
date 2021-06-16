@@ -65,8 +65,7 @@ __device__ Vec slope_limiter(Vec& l,Vec& m,Vec& r)
 {
    return slope_limiter_sb(l,m,r);
 }
-//changed to Real it was Realv
-__device__ void compute_plm_coeff(Vec *values, uint k, Vec *a, Real threshold)
+__device__ void compute_plm_coeff(Vec *values, uint k, Vec *a, Realv threshold)
 {
   // scale values closer to 1 for more accurate slope limiter calculation
   Realv scale = 1./threshold;
@@ -287,7 +286,7 @@ Realf* acceleration_1_wrapper
   int totalColumns,
   Column *columns,
   int valuesSizeRequired,
-  Vec values[],
+  Vec *values,
   uint cell_indices_to_id[],
   Realv intersection,
   Realv intersection_di,
@@ -295,7 +294,7 @@ Realf* acceleration_1_wrapper
   Realv intersection_dk,
   Realv v_min,
   Realv dv,
-  Real minValue
+  Realv minValue
 )
 {
   printf("STAGE 3\n");
