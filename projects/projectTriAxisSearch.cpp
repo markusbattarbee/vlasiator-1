@@ -84,7 +84,7 @@ namespace projects {
          search = true;
          counter = 0;
          while(search) {
-            if (0.1 * getObjectWrapper().particleSpecies[popID].sparseMinValue >
+            if (0.1 * cell->getVelocityBlockMinValue(popID) >
                calcPhaseSpaceDensity(
                                      x,
                                      y,
@@ -110,7 +110,7 @@ namespace projects {
          search = true;
          counter = 0;
          while(search) {
-            if (0.1 * getObjectWrapper().particleSpecies[popID].sparseMinValue >
+            if (0.1 * cell->getVelocityBlockMinValue(popID) >
                calcPhaseSpaceDensity(
                                      x,
                                      y,
