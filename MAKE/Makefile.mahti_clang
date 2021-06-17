@@ -56,12 +56,12 @@ CC_BRAND_VERSION = 21.2
 
 # identify nvcc warnings: -Xcudafe --display_error_number
 # http://www.ssl.berkeley.edu/~jimm/grizzly_docs/SSL/opt/intel/cc/9.0/lib/locale/en_US/mcpcom.msg
-# suppress nvcc warnings: -Xcudafe "--diag_suppress=code_is_unreachable,set_but_not_used,declared_but_not_referenced"
+# suppress nvcc warnings: -Xcudafe "--diag_suppress=code_is_unreachable,set_but_not_used,declared_but_not_referenced,unrecognized_pragma,loop_not_reachable,initialization_not_reachable"
 # equal to: -Xcudafe "--diag_suppress=111,550,177"
 
 # small loop unrolling is done automatically with nvcc #-std=c++17
 
-CXXFLAGS += -g -O3 -fopenmp -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1 -Xcudafe "--diag_suppress=111,550,177"
+CXXFLAGS += -g -O3 -fopenmp -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1 -Xcudafe "--diag_suppress=111,550,177,1676,128,185"
 testpackage: CXXFLAGS += -g -O2 -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1
 
 MATHFLAGS = -use_fast_math
