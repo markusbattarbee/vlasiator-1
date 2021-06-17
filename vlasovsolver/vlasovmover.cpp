@@ -396,9 +396,9 @@ void calculateAcceleration(const uint popID,const uint globalMaxSubcycles,const 
          //spatial block neighbors as much in sync as possible for
          //adjust blocks.
          Real subcycleDt;
-         if( (step + 1) * maxVdt > dt) {
-            subcycleDt = max(dt - step * maxVdt, 0.0);
-         } else{
+         if ( (step + 1)*maxVdt > fabs(dt) ) {
+            subcycleDt = max(fabs(dt) - step * maxVdt, 0.0);
+         } else {
             subcycleDt = maxVdt;
          }
          if (dt<0) subcycleDt = -subcycleDt;
@@ -412,7 +412,7 @@ void calculateAcceleration(const uint popID,const uint globalMaxSubcycles,const 
       }
       // Wait for all of the async GPU stuff to be done before continuing
       // TODO: switch CPU, GPU #ifdef #elif
-      #pragma acc wait
+      //#pragma acc wait
    }
 
    //global adjust after each subcycle to keep number of blocks managable. Even the ones not

@@ -151,7 +151,8 @@ namespace SBC {
 
       while (search) {
          #warning TODO: add SpatialCell::getVelocityBlockMinValue() in place of sparseMinValue?
-         if (0.1 * getObjectWrapper().particleSpecies[popID].sparseMinValue > 
+         //if (0.1 * getObjectWrapper().particleSpecies[popID].sparseMinValue >
+         if (0.1 * cell.getVelocityBlockMinValue(popID) >
              maxwellianDistribution(
                                     popID,
                                     rho,

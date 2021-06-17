@@ -166,9 +166,9 @@ bool map_1d(SpatialCell* spatial_cell,
    if(vmesh.size() == 0)
       return true;
 
-   const int NUM_ASYNC_QUEUES=P::openaccQueueNum;
-   int openacc_async_queue_id = (int)(spatial_cell->parameters[CellParams::CELLID]) % NUM_ASYNC_QUEUES;
-   //openacc_async_queue_id += omp_get_thread_num() * NUM_ASYNC_QUEUES;
+   const int NUM_ASYNC_QUEUES=P::GPUQueueNum;
+   int gpu_async_queue_id = (int)(spatial_cell->parameters[CellParams::CELLID]) % NUM_ASYNC_QUEUES;
+   //gpu_async_queue_id += omp_get_thread_num() * NUM_ASYNC_QUEUES;
 
    // Velocity grid refinement level, has no effect but is
    // needed in some vmesh::VelocityMesh function calls.
@@ -290,7 +290,7 @@ bool map_1d(SpatialCell* spatial_cell,
    // (TODO: Double-check this for consistency?)
    // Upload that to the GPU.
    //if(useAccelerator)
-   // { #pragma acc enter data copyin(values[:valuesSizeRequired]) async(openacc_async_queue_id) }
+   // { #pragma acc enter data copyin(values[:valuesSizeRequired]) async(gpu_async_queue_id) }
 
    // Calculate target column extents
    for( uint setIndex=0; setIndex< setColumnOffsets.size(); ++setIndex) {
@@ -434,11 +434,11 @@ bool map_1d(SpatialCell* spatial_cell,
     {
       blockData[cell] = 0;
     }
-    //#pragma acc enter data copyin(blockData[:blockDataSize*WID3]) async(openacc_async_queue_id)
+    //#pragma acc enter data copyin(blockData[:blockDataSize*WID3]) async(gpu_async_queue_id)
     /*
     previous version:
-    #pragma acc enter data create(blockData[:blockDataSize*WID3]) async(openacc_async_queue_id)
-    //#pragma acc parallel loop present(blockData[:blockDataSize*WID3]) async(openacc_async_queue_id)
+    #pragma acc enter data create(blockData[:blockDataSize*WID3]) async(gpu_async_queue_id)
+    //#pragma acc parallel loop present(blockData[:blockDataSize*WID3]) async(gpu_async_queue_id)
     for( int cell=0; cell < blockDataSize*WID3; cell++)
     {
        blockData[cell] = 0;

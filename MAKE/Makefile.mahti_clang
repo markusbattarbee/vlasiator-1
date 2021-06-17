@@ -62,7 +62,7 @@ CC_BRAND_VERSION = 21.2
 # small loop unrolling is done automatically with nvcc #-std=c++17
 
 CXXFLAGS += -g -O3 -fopenmp -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1 -Xcudafe "--diag_suppress=111,550,177,1676,128,185"
-testpackage: CXXFLAGS += -g -O2 -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1
+testpackage: CXXFLAGS = -g -O2 -fopenmp -W -Wall -march=native -mfma -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1
 
 MATHFLAGS = -use_fast_math
 testpackage: MATHFLAGS = 

@@ -155,7 +155,7 @@ vector<string> P::blurPassString;
 std::vector<int> P::numPasses;
 
 
-int P::openaccQueueNum = 8;
+int P::GPUQueueNum = 8;
 
 bool Parameters::addParameters(){
    //the other default parameters we read through the add/get interface
@@ -320,7 +320,7 @@ bool Parameters::addParameters(){
    Readparameters::add("AMR.box_center_x","x coordinate of the center of the box that is refined (for testing)",0.0);
    Readparameters::add("AMR.box_center_y","y coordinate of the center of the box that is refined (for testing)",0.0);
    Readparameters::add("AMR.box_center_z","z coordinate of the center of the box that is refined (for testing)",0.0);
-   Readparameters::add("openacc.queueNum", "Number of openACC queues to spread async calculations over",8);
+   Readparameters::add("GPU.queueNum", "Number of GPU queues to spread async calculations over",8);
    Readparameters::addComposing("AMR.filterpasses", std::string("AMR filter passes for each individual refinement level"));
    return true;
 }
@@ -633,7 +633,7 @@ bool Parameters::getParameters(){
    Readparameters::get("bailout.min_dt", P::bailout_min_dt);
    Readparameters::get("bailout.max_memory", P::bailout_max_memory);
 
-   Readparameters::get("openacc.queueNum",P::openaccQueueNum);
+   Readparameters::get("GPU.queueNum",P::GPUQueueNum);
 
    for (size_t s=0; s<P::systemWriteName.size(); ++s) P::systemWrites.push_back(0);
    

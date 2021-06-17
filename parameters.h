@@ -151,7 +151,7 @@ struct Parameters {
    static Realf amrBoxCenterY;
    static Realf amrBoxCenterZ;
 
-   static int openaccQueueNum;
+   static int GPUQueueNum;
    
    static std::vector<std::string> blurPassString;
    static std::vector<int> numPasses;
